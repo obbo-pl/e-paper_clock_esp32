@@ -1,0 +1,114 @@
+menu "e-Paper Clock"
+
+    choice
+		prompt "Choose language."
+        help
+			Choose language.
+		
+		config EPCLOCK_LANG_en_US
+			bool "English"
+			
+		config EPCLOCK_LANG_fr_FR
+			bool "French"
+			
+		config EPCLOCK_LANG_de_DE
+			bool "German"
+			
+		config EPCLOCK_LANG_pl_PL
+			bool "Polish"
+			
+		config EPCLOCK_LANG_es_ES
+			bool "Spanish"
+
+	endchoice 			
+					
+    config HAVE_SENSOR_TILT
+        bool "Have Tilt Sensor."
+        default n
+        help
+            Use Tilt Sensor.
+
+    config SENSOR_TILT
+        int "GPIO for Tilt Sensor."
+        depends on HAVE_SENSOR_TILT
+		range -1 39
+		default 12 if HAVE_SENSOR_TILT
+		default -1
+
+	config TILT_SENSOR_WHEN_CLOSE
+        int "Tilt sensor logic level when close"
+        depends on HAVE_SENSOR_TILT
+		range 0 1
+		default 0
+
+	config TILT_SENSOR_LEVEL_CLOSE
+		int 
+		default 0 if TILT_SENSOR_WHEN_CLOSE = 0
+		default 1 if TILT_SENSOR_WHEN_CLOSE = 1
+	
+	config TILT_SENSOR_LEVEL_OPEN
+		int 
+		default 0 if TILT_SENSOR_WHEN_CLOSE = 1
+		default 1 if TILT_SENSOR_WHEN_CLOSE = 0
+
+    config HAVE_SENSOR_ACCELERATION
+        bool "Have Acceleration Sensor."
+        default n
+	
+    config HAVE_EPAPER_PWR
+        bool "Control e-Paper display power."
+        default n
+        help
+            Control e-Paper display power.
+			
+    config EPAPER_PWR
+        int "GPIO for dispaly power control."
+        depends on HAVE_EPAPER_PWR
+		range -1 39
+		default 4 if HAVE_EPAPER_PWR
+		default -1
+			
+	config BATTERY_CHARGING_STATUS
+		int "GPIO for battery charging status indicator"
+		range 0 39
+		default 14
+		
+	config VBUS_VOLTAGE_CHECK
+		int "GPIO for checkig VBUS voltage"
+		range 0 39
+		default 39
+		
+	config NTP_SERVER
+		string "NTP server"
+		default "pool.ntp.org"
+		
+	config TIME_ZONE
+		string "Time zone"
+		default "CET-1CEST,M3.5.0/02,M10.5.0/03"
+		
+	config LAYOUT_SHOW_FORECAST
+		bool "Show forecast"
+		default y
+		
+	config OWM_FORECAST_BUFFER_SIZE
+		int "Size of memory allocated for OpenWeather response (in kbytes)"
+		depends on LAYOUT_SHOW_FORECAST
+		range 2 128
+		default 10
+		
+	config OWM_FORECAST_LAT
+		string "Geographical coordinates latitude"
+		depends on LAYOUT_SHOW_FORECAST
+		default "52.22"
+		
+	config OWM_FORECAST_LON
+		string "Geographical coordinates longitude"
+		depends on LAYOUT_SHOW_FORECAST
+		default "20.99"
+		
+	config LAYOUT_SHOW_DATE
+		bool "Show date and week day"
+		default y
+		
+
+endmenu
