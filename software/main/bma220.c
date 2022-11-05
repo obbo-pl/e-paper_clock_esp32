@@ -27,6 +27,27 @@
 #include "bma220.h"
 
 
+static const uint8_t bma220_filter_reg[BMA220_FILTER_COUNT] = {
+		BMA220_FILTER_1kHz_REG,
+		BMA220_FILTER_500Hz_REG,
+		BMA220_FILTER_250Hz_REG,
+		BMA220_FILTER_125Hz_REG,
+		BMA220_FILTER_64Hz_REG,
+		BMA220_FILTER_32Hz_REG,
+};
+static const uint8_t bma220_filter_delay[BMA220_FILTER_COUNT] = {
+		BMA220_FILTER_1kHz_DELAY,
+		BMA220_FILTER_500Hz_DELAY,
+		BMA220_FILTER_250Hz_DELAY,
+		BMA220_FILTER_125Hz_DELAY,
+		BMA220_FILTER_64Hz_DELAY,
+		BMA220_FILTER_32Hz_DELAY,
+};
+
+bma220_t chip_config = {
+		.int_config_bm = 0x0000,
+};
+
 
 bma220_err_t bma220_get_chipid(uint8_t *chipid)
 {
@@ -48,6 +69,28 @@ bma220_err_t bma220_reset()
 		}
 	}
 	return result;
+}
+
+bma220_err_t bma220_reset_interrupt()
+{
+	uint8_t temp = (uint8_t)chip_config.int_config_bm;
+	bma220_err_t result = bma220_i2c_write(BMA220_INTERRUPT_CONFIG, &temp, 1);
+	if (result == BMA220_OK) {
+		temp = (uint8_t)((chip_config.int_config_bm | BMA220_INTERRUPT_CONFIG_RESET_INT_bm) >> 8);
+		result = bma220_i2c_write(BMA220_INTERRUPT_CONFIG + BMA220_I2C_INCREMENT_STEP, &temp, 1);
+	}
+	return result;
+}
+
+bma220_err_t bma220_set_interrupt_config(uint16_t config)
+{
+	chip_config.int_config_bm = config;
+	return bma220_reset_interrupt();
+}
+
+bma220_err_t bma220_get_interrupt(uint16_t *value)
+{
+	return bma220_i2c_read(BMA220_INTERRUPT, (uint8_t*)value, 2);
 }
 
 bma220_err_t bma220_set_filter(bma220_filter_t value)
@@ -79,12 +122,12 @@ bma220_err_t bma220_get_acceleration(uint8_t dir, int8_t *value)
 bma220_err_t bma220_get_acceleration_xyz(bma220_accel_t *value)
 {
 	bma220_err_t result;
-	uint8_t temp_value[3];
-	result = bma220_i2c_read(BMA220_ACCELERATION, temp_value, 3);
+	uint8_t data[3];
+	result = bma220_i2c_read(BMA220_ACCELERATION, data, 3);
 	if (result == BMA220_OK) {
-		value->x = (int8_t)temp_value[0] >> 2;
-		value->y = (int8_t)temp_value[1] >> 2;
-		value->z = (int8_t)temp_value[2] >> 2;
+		value->x = (int8_t)data[0] >> 2;
+		value->y = (int8_t)data[1] >> 2;
+		value->z = (int8_t)data[2] >> 2;
 	}
 	return result;
 }
