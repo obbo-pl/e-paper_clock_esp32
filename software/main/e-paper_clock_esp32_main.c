@@ -32,6 +32,7 @@
 #include "owm_forecast.h"
 #include "esp_err.h"
 #include "esp_timer.h"
+#include <inttypes.h>
 
 #include "esp_event.h"
 #include "freertos/event_groups.h"
@@ -58,33 +59,33 @@
  *	LVGL driver uc8179c (https://github.com/obbo-pl/lvgl_esp32_drivers/tree/uc8179c)
 */
 
-#define EPCLOCK_VERSION_MAJOR      		"0"
-#define EPCLOCK_VERSION_MINOR      		"9"
+#define EPCLOCK_VERSION_MAJOR      			"0"
+#define EPCLOCK_VERSION_MINOR      			"9"
 //#define MONITOR_FREE_SPACE
 #define DISABLE_VBUS_WAKEUP
 
-#define ADC_SAMPLES   					((int)64)
-#define uS_TO_S_FACTOR 					(1000000ULL)
+#define ADC_SAMPLES   						((int)64)
+#define uS_TO_S_FACTOR 						(1000000ULL)
 
-#define STRINGIZE_(x) 					#x
-#define STRINGIZE(x) 					STRINGIZE_(x)
+#define STRINGIZE_(x) 						#x
+#define STRINGIZE(x) 						STRINGIZE_(x)
 #ifdef CONFIG_LAYOUT_SHOW_FORECAST
-#define EPCLOCK_OWM_UNIT				"metric"
-#define EPCLOCK_OWM_URL 				"https://api.openweathermap.org/data/2.5/forecast" \
-										"?lat=" CONFIG_OWM_FORECAST_LAT "&lon=" CONFIG_OWM_FORECAST_LON \
-												"&cnt=" STRINGIZE(OWM_FORECAST_RECORD_MAX_COUNT) "&appid=" EPCLOCK_OWM_KEY \
-												"&mode=json&units=" EPCLOCK_OWM_UNIT
-#define EPCLOCK_OWM_BUFFER_SIZE			(CONFIG_OWM_FORECAST_BUFFER_SIZE * 1024)
+#define EPCLOCK_OWM_UNIT					"metric"
+#define EPCLOCK_OWM_URL 					"https://api.openweathermap.org/data/2.5/forecast" \
+											"?lat=" CONFIG_OWM_FORECAST_LAT "&lon=" CONFIG_OWM_FORECAST_LON \
+											"&cnt=" STRINGIZE(OWM_FORECAST_RECORD_MAX_COUNT) "&appid=" EPCLOCK_OWM_KEY \
+											"&mode=json&units=" EPCLOCK_OWM_UNIT
+#define EPCLOCK_OWM_BUFFER_SIZE				(CONFIG_OWM_FORECAST_BUFFER_SIZE * 1024)
 #endif
 
-#define WAKEUP_EXT1_PIN_BITMASK 		(1ULL << CONFIG_VBUS_VOLTAGE_CHECK)
+#define WAKEUP_EXT1_PIN_BITMASK 			(1ULL << CONFIG_VBUS_VOLTAGE_CHECK)
 
-#define BATTERY_VOLTAGE_MAX_MV          (4200)
-//#define BATTERY_VOLTAGE_MIN_MV        (2500)
+#define BATTERY_VOLTAGE_MAX_MV          	(4200)
+//#define BATTERY_VOLTAGE_MIN_MV        	(2500)
 // ESP32 Wrover-E Recommended Power supply voltage min. (3.0V) + AP2112 Dropout Voltage (250mV)
-#define BATTERY_VOLTAGE_MIN_MV          (3250)
-#define BATTERY_VOLTAGE_FACTOR			((float)2.135)
-#define SENSOR_PRINT_INTERVAL			(20*uS_TO_S_FACTOR)
+#define BATTERY_VOLTAGE_MIN_MV          	(3250)
+#define BATTERY_VOLTAGE_FACTOR				((float)2.135)
+#define SENSOR_PRINT_INTERVAL				(20*uS_TO_S_FACTOR)
 RTC_DATA_ATTR int battery_voltage_mv = -1;
 RTC_DATA_ATTR battery_level_t battery_voltage_level = BATTERY_VOLTAGE_LEVEL_UNKNOWN;
 RTC_DATA_ATTR int battery_charging_current_state = false;
@@ -103,39 +104,39 @@ uint32_t tilt_sensor_state_duration_msec = 0;
 RTC_DATA_ATTR bool tilt_sensor_change_detected = false;
 
 // USB
-#define VBUS_CONNECTED   	    	1
+#define VBUS_CONNECTED   	    			(1)
 RTC_DATA_ATTR int vbus_voltege_current_state = false;
 RTC_DATA_ATTR int vbus_voltege_previous_state = false;
 RTC_DATA_ATTR bool vbus_voltege_change_detected = false;
 
 // wi-fi
-#define WIFI_TIMEOUT_MSEC				30000
-#define WIFI_MAXIMUM_RETRY_COUNT  		3
+#define WIFI_TIMEOUT_MSEC					(30000)
+#define WIFI_MAXIMUM_RETRY_COUNT  			(3)
 EventGroupHandle_t wifi_event_group;
-#define WIFI_CONNECTED_BIT 				BIT0
-#define WIFI_FAIL_BIT      				BIT1
+#define WIFI_CONNECTED_BIT 					(BIT0)
+#define WIFI_FAIL_BIT      					(BIT1)
 int wifi_retry_count = 0;
 bool tcpip_enabled = false;
 esp_netif_t *netif_instance;
 
 // SNTP
-#define SNTP_UPDATE_INTERVAL 			(24*3600UL)
-#define SNTP_UPDATE_RETRY       		(4*3600UL)
-#define EPCLOCK_FIRST_SYNCHRO_RETRY		(300)
-#define SNTP_TIMEOUT_SEC				20
+#define SNTP_UPDATE_INTERVAL 				(24*3600UL)
+#define SNTP_UPDATE_RETRY       			(4*3600UL)
+#define EPCLOCK_FIRST_SYNCHRO_RETRY			(300)
+#define SNTP_TIMEOUT_SEC					(20)
 RTC_DATA_ATTR time_t inet_next_connect_time = 0;
 RTC_DATA_ATTR bool sntp_first_synchro_completed = false;
 
 // LVGL
 LV_IMG_DECLARE(white);
-RTC_DATA_ATTR int font_style_set = 1;
-#define LV_TICK_PERIOD_MS 				10
+RTC_DATA_ATTR uint8_t font_style_set = 1;
+#define LV_TICK_PERIOD_MS 					(10)
 esp_timer_handle_t gui_periodic_timer;
 bool gui_up_to_date = true;
-#define EPCLOCK_COLOR_RED_HEX			0x600000
+#define EPCLOCK_COLOR_RED_HEX				(0x600000)
 RTC_DATA_ATTR bool request_update_red = true;
 
-#define GET_UP_EARLY					1	// [sec]
+#define GET_UP_EARLY						1	// [sec]
 
 bool sensor_first_check_done = false;
 bool gui_ready = false;
@@ -166,9 +167,17 @@ bool gui_ready = false;
 
 static const adc_channel_t channel = ADC_CHANNEL_0;
 
+// accelerometer
 bma220_accel_t acceleration = {.x = 0, .y = 0, .z = 0};
 bool accelerometer_present = false;
-#define BMA220_TRIGGER_LEVEL			4
+time_t accelerometer_int_event_time = 0;
+#define BMA220_TRIGGER_LEVEL				(6)
+#define ACCELERATION_SHAKE_BREAK_LENGTH		(40)
+#define ACCELERATION_SHAKE_LENGTH 			(6)
+#define ACCELERATION_TILT_LEFT	 			(-1)
+#define ACCELERATION_TILT_NOT	 			(0)
+#define ACCELERATION_TILT_RIGHT	 			(1)
+
 
 lv_color_t* buf1;
 char *http_response_buffer;
@@ -183,10 +192,10 @@ enum {
 };
 
 int epclock_dispay_current_lut = EPCLOCK_DISPLAY_LUT_DEFAULT;
-#define EPCLOCK_DISPALY_REFRESH_TIMEOUT	30
-#define EPCLOCK_GUI_READY_TIMEOUT		2
+#define EPCLOCK_DISPALY_REFRESH_TIMEOUT		(30)
+#define EPCLOCK_GUI_READY_TIMEOUT			(2)
 
-#define EPCLOCK_OWM_FORECAST_COUNT		8
+#define EPCLOCK_OWM_FORECAST_COUNT			(8)
 lv_obj_t *label_time;
 #ifdef CONFIG_LAYOUT_SHOW_DATE
 lv_obj_t *label_weekday;
@@ -208,11 +217,14 @@ lv_style_t st_forecast1;
 lv_style_t st_forecast2;
 lv_style_t st_container;
 
-QueueHandle_t xQueue_request_update_red;
+QueueHandle_t update_red_evt_queue = NULL;
+QueueHandle_t acceleration_evt_queue = NULL;
 SemaphoreHandle_t xSemaphore_gui;
 SemaphoreHandle_t xSemaphore_sensor;
 
+
 // function prototype
+void IRAM_ATTR gpio_isr_handler(void* arg);
 void print_welcome();
 void print_wakeup_reason(esp_sleep_wakeup_cause_t reason);
 void set_epaper_power(bool enable);
@@ -232,7 +244,7 @@ void lv_tick_task(void *arg);
 void init_gui_layout();
 void guiTask(void *pvParameter);
 void sensorTask(void *pvParameter);
-void set_font_style_set(int style_set);
+void set_font_style_set(uint8_t style_set);
 void gui_refresh_ready();
 void set_style_set_color(lv_style_t *style, lv_color_t color_text, lv_color_t color_background);
 
@@ -268,7 +280,14 @@ void app_main(void)
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
     io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
     gpio_config(&io_conf);
+#ifdef CONFIG_HAVE_SENSOR_ACCELERATION
+    io_conf.pin_bit_mask = (1ULL << CONFIG_ACCELERATION_SENSOR_INTERRUPT);
+    io_conf.intr_type = GPIO_INTR_POSEDGE;
+    gpio_config(&io_conf);
+#endif
+    gpio_install_isr_service(0);
     wakeup_reason = esp_sleep_get_wakeup_cause();
+    gpio_isr_handler_add(CONFIG_ACCELERATION_SENSOR_INTERRUPT, gpio_isr_handler, (void*)CONFIG_ACCELERATION_SENSOR_INTERRUPT);
 #if (3 * EPCLOCK_OWM_BUFFER_SIZE < DISP_BUF_SIZE)
     dispaly_buffer_size = DISP_BUF_SIZE;
 #else
@@ -302,7 +321,8 @@ void app_main(void)
     }
     err = esp_event_loop_create_default();
     if (err != ESP_OK) ESP_LOGE(TAG, "Creating an event loop has failed ");
-    xQueue_request_update_red = xQueueCreate(1, sizeof(bool));
+    acceleration_evt_queue = xQueueCreate(1, sizeof(uint8_t));
+    update_red_evt_queue = xQueueCreate(1, sizeof(bool));
     TaskHandle_t sensorTask_handle;
     xTaskCreatePinnedToCore(sensorTask, "sensor", 2048, NULL, 0, &sensorTask_handle, 1);
     if ((wakeup_reason == ESP_SLEEP_WAKEUP_UNDEFINED) || (wakeup_reason == ESP_SLEEP_WAKEUP_ALL)) {
@@ -316,11 +336,13 @@ void app_main(void)
     	vTaskDelay(10 / portTICK_PERIOD_MS);
     	timeout_count--;
     }
-    if ((xSemaphore_sensor == NULL) || (xSemaphore_gui == NULL)) ESP_LOGE(TAG, "At least one semaphore creation has timed out");
-
-    int sleep_duration;
+    if ((xSemaphore_sensor == NULL) || (xSemaphore_gui == NULL)) ESP_LOGE(TAG, "At least one semaphore creation has failed");
+    uint32_t sleep_duration;
+    bool sleep_long = false;
+    bool sleep_skip;
     while (1)
     {
+        sleep_skip = false;
         if (!sntp_first_synchro_completed) connect_inet();
         if (sntp_first_synchro_completed) {
 			ESP_LOGI(TAG, "Waiting for GUI ready");
@@ -347,12 +369,15 @@ void app_main(void)
 					if ((tilt_sensor_current_state == CONFIG_TILT_SENSOR_LEVEL_CLOSE) && (tilt_sensor_state_duration_msec > 3000)) {
 #endif
 #if defined(CONFIG_HAVE_SENSOR_ACCELERATION)
+						// tilt to the left
 						if (acceleration.x > BMA220_TRIGGER_LEVEL) {
 							font_style_set++;
 							if (font_style_set >= FONT_STYLE_COUNT) font_style_set = 0;
-						} else if (acceleration.x < -BMA220_TRIGGER_LEVEL) {
+						}
+						// tilt to the right
+						if (acceleration.x < -BMA220_TRIGGER_LEVEL) {
+							if (font_style_set == 0) font_style_set = FONT_STYLE_COUNT;
 							font_style_set--;
-							if (font_style_set < 0) font_style_set = FONT_STYLE_COUNT - 1;
 						}
 						set_font_style_set(font_style_set);
 #else
@@ -418,7 +443,7 @@ void app_main(void)
 			            mon.frag_pct,
 			            (int)mon.free_biggest_size);
 #endif
-				if (xQueue_request_update_red != 0) xQueueReceive(xQueue_request_update_red, &request_update_red, 0);
+				if (update_red_evt_queue != 0) xQueueReceive(update_red_evt_queue, &request_update_red, 0);
 				if ((timeinfo.tm_hour != 3)) {
 					if (request_update_red) {
 						set_dispaly_lut(EPCLOCK_DISPLAY_LUT_FULL_RED);
@@ -441,41 +466,76 @@ void app_main(void)
 			if (gui_up_to_date) ESP_LOGI(TAG, "GUI refreshed in %lds", time(NULL) - refresh_display_start);
         }
 		LOG_ON_ERROR("sensor check", timeout_sec(&sensor_first_check_done, 1));
-#ifdef MONITOR_FREE_SPACE
-		ESP_LOGI(TAG, "GUI: free stack space %u byte(s)", uxTaskGetStackHighWaterMark(guiTask_handle));
-		ESP_LOGI(TAG, "Sensor: free stack space %u byte(s)", uxTaskGetStackHighWaterMark(sensorTask_handle));
+#if defined(CONFIG_HAVE_SENSOR_ACCELERATION)
+		// X.shake
+		uint32_t acceleration_shake = 0;
+		xQueueReceive(acceleration_evt_queue, &acceleration_shake, 0);
+		if (acceleration_shake) {
+			inet_next_connect_time = time(NULL);
+		}
+		// interrupt
+		if (gpio_get_level(CONFIG_ACCELERATION_SENSOR_INTERRUPT)) {
+			if (((esp_timer_get_time() - accelerometer_int_event_time) / 1000) > 3000){
+				// forward tilt
+				if (acceleration.y > BMA220_TRIGGER_LEVEL) {
+					sleep_long = true;
+				}
+				// tilting backwards
+				if (acceleration.y < -BMA220_TRIGGER_LEVEL) {
+					// TODO add an action, change the layout
+				}
+			} else {
+				sleep_skip = true;
+			}
+		}
 #endif
 #ifndef DISABLE_VBUS_WAKEUP
         if ((tilt_sensor_current_state == CONFIG_TILT_SENSOR_LEVEL_CLOSE) || (vbus_voltege_current_state == VBUS_CONNECTED)) {
 #else
         if (tilt_sensor_current_state == CONFIG_TILT_SENSOR_LEVEL_CLOSE) {
 #endif
+        	sleep_skip = true;
+        }
+#ifdef MONITOR_FREE_SPACE
+		ESP_LOGI(TAG, "GUI: free stack space %u byte(s)", uxTaskGetStackHighWaterMark(guiTask_handle));
+		ESP_LOGI(TAG, "Sensor: free stack space %u byte(s)", uxTaskGetStackHighWaterMark(sensorTask_handle));
+#endif
+        if (sleep_skip) {
 			sleep_duration = 60 - time(NULL)%60;
 			if (sleep_duration > GET_UP_EARLY) sleep_duration -= GET_UP_EARLY;
 			ESP_LOGI(TAG, "Waiting %us for a minute change", sleep_duration);
 			wakeup_reason = ESP_SLEEP_WAKEUP_TIMER;
+			sleep_long = false;
 			vTaskDelay(1000 * sleep_duration / portTICK_PERIOD_MS);
         } else {
 			goto go_sleep;
         }
     }
 go_sleep:
+	if (sleep_long) {
+		sleep_duration = 0xFFFFFFFF;
+		uc8179c_clear_screen();
+	} else if (!sntp_first_synchro_completed) {
+       	sleep_duration = EPCLOCK_FIRST_SYNCHRO_RETRY;
+    } else {
+		sleep_duration = 60 - time(NULL)%60;
+		if (sleep_duration > GET_UP_EARLY) sleep_duration -= GET_UP_EARLY;
+    }
 	if (pdTRUE == xSemaphoreTake(xSemaphore_gui, 1000 * EPCLOCK_DISPALY_REFRESH_TIMEOUT / portTICK_PERIOD_MS )) {}
 	set_epaper_power(false);
 	if (esp_timer_is_active(gui_periodic_timer)) esp_timer_stop(gui_periodic_timer);
 	if (guiTask_handle != NULL) vTaskDelete(guiTask_handle);
 	if (pdTRUE == xSemaphoreTake(xSemaphore_sensor, 200 / portTICK_PERIOD_MS )) {}
 	if (sensorTask_handle != NULL) vTaskDelete(sensorTask_handle);
-	if (!sntp_first_synchro_completed) {
-       	sleep_duration = EPCLOCK_FIRST_SYNCHRO_RETRY;
-    } else {
-		sleep_duration = 60 - time(NULL)%60;
-		if (sleep_duration > GET_UP_EARLY) sleep_duration -= GET_UP_EARLY;
-    }
-	if (xQueue_request_update_red != 0) xQueueReceive(xQueue_request_update_red, &request_update_red, 0);
+	if (update_red_evt_queue != 0) xQueueReceive(update_red_evt_queue, &request_update_red, 0);
 	ESP_LOGI(TAG, "Going to sleep for %us", sleep_duration);
     esp_sleep_enable_timer_wakeup(sleep_duration * uS_TO_S_FACTOR);
 	esp_deep_sleep_start();
+}
+
+void IRAM_ATTR gpio_isr_handler(void* arg)
+{
+	accelerometer_int_event_time = esp_timer_get_time();
 }
 
 esp_err_t timeout_sec(bool *condition, uint16_t delay_sec)
@@ -495,7 +555,9 @@ void sensorTask(void *pvParameter)
 	static const char *TAG = "sensors";
 	ESP_LOGI(TAG, "Running sensors task");
 	xSemaphore_sensor = xSemaphoreCreateMutex();
-
+	int acceleration_shake_prev = ACCELERATION_TILT_NOT;
+	uint8_t acceleration_shake_count = 0;
+	uint8_t acceleration_shake_break = 0;
 	adc1_config_width(ADC_WIDTH_BIT_12);
 	adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
 
@@ -510,6 +572,9 @@ void sensorTask(void *pvParameter)
 			ESP_LOGI(TAG, "BMA220 acceleration sensor detected");
 			LOG_ON_ERROR("BMA220 set range", bma220_set_range(BMA220_RANGE_2g));
 			LOG_ON_ERROR("BMA220 set filter", bma220_set_filter(BMA220_FILTER_250Hz));
+			LOG_ON_ERROR("BMA220 set interrupt", bma220_set_interrupt_config(
+					BMA220_INTERRUPT_CONFIG_LAT_PERMANENTLY_bm |
+					BMA220_INTERRUPT_CONFIG_ORIENT_EN_bm));
 		}
 	}
 #endif
@@ -542,8 +607,8 @@ void sensorTask(void *pvParameter)
 			battery_voltage_level = battery_level(battery_voltage_mv, BATTERY_VOLTAGE_MIN_MV, BATTERY_VOLTAGE_MAX_MV, battery_charging_current_state);
 			// charging state
 			check_battery_charging();
-			if ((battery_charging_current_state) && (xQueue_request_update_red != 0)) {
-				xQueueSend(xQueue_request_update_red, &battery_charging_current_state, 50);
+			if ((battery_charging_current_state) && (update_red_evt_queue != 0)) {
+				xQueueSend(update_red_evt_queue, &battery_charging_current_state, 0);
 			}
 			if (battery_charging_change_detected) {
 				if (battery_charging_current_state) {
@@ -556,6 +621,31 @@ void sensorTask(void *pvParameter)
 			// BMA220 acceleration sensor
 			if (accelerometer_present) {
 				LOG_ON_ERROR("BMA220 get acceleration", bma220_get_acceleration_xyz(&acceleration));
+				if ((acceleration.x < BMA220_TRIGGER_LEVEL) && (acceleration.x > -BMA220_TRIGGER_LEVEL)) {
+					acceleration_shake_break++;
+					if (acceleration_shake_break > ACCELERATION_SHAKE_BREAK_LENGTH) {
+						acceleration_shake_count = 0;
+						acceleration_shake_prev = ACCELERATION_TILT_NOT;
+					}
+				}
+				if (uxQueueMessagesWaiting(acceleration_evt_queue) == 0) {
+					if ((acceleration.x > BMA220_TRIGGER_LEVEL) && (acceleration_shake_prev != ACCELERATION_TILT_LEFT)) {
+						acceleration_shake_count++;
+						acceleration_shake_prev = ACCELERATION_TILT_LEFT;
+						acceleration_shake_break = 0;
+					}
+					if ((acceleration.x < -BMA220_TRIGGER_LEVEL) && (acceleration_shake_prev != ACCELERATION_TILT_RIGHT)) {
+						acceleration_shake_count++;
+						acceleration_shake_prev = ACCELERATION_TILT_RIGHT;
+						acceleration_shake_break = 0;
+					}
+					if (acceleration_shake_count >= ACCELERATION_SHAKE_LENGTH) {
+						xQueueSend(acceleration_evt_queue, &acceleration_shake_count, 0);
+						acceleration_shake_count = 0;
+						acceleration_shake_prev = ACCELERATION_TILT_NOT;
+						ESP_LOGI(TAG, "Shake detected");
+					}
+				}
 			}
 			sensor_first_check_done = true;
 			// print summary
@@ -1019,7 +1109,7 @@ void gui_refresh_ready()
 	gui_up_to_date = true;
 }
 
-void set_font_style_set(int style_set)
+void set_font_style_set(uint8_t style_set)
 {
 #ifdef CONFIG_LAYOUT_SHOW_FORECAST
     lv_style_set_text_font(&st_time, LV_STATE_DEFAULT, font_style[style_set][FONT_PURPOSE_TIME1]);

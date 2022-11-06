@@ -55,6 +55,13 @@ menu "e-Paper Clock"
         bool "Have Acceleration Sensor."
         default n
 	
+    config ACCELERATION_SENSOR_INTERRUPT
+        int "GPIO for Acceleration Sensor interrupt."
+        depends on HAVE_SENSOR_ACCELERATION
+		range -1 39
+		default 15 if HAVE_SENSOR_ACCELERATION
+		default -1
+        
     config HAVE_EPAPER_PWR
         bool "Control e-Paper display power."
         default n
