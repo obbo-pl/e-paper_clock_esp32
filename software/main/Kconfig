@@ -94,7 +94,7 @@ menu "e-Paper Clock"
 		default "CET-1CEST,M3.5.0/02,M10.5.0/03"
 		
 	config LAYOUT_SHOW_FORECAST
-		bool "Show forecast"
+		bool "Download the forecast"
 		default y
 		
 	config OWM_FORECAST_BUFFER_SIZE
@@ -114,7 +114,8 @@ menu "e-Paper Clock"
 		default "20.99"
 		
 	config LAYOUT_SHOW_DATE
-		bool "Show date and week day"
+		bool 
+#        "Show date and week day"
 		default y
 		
 

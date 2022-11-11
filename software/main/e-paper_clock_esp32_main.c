@@ -195,20 +195,26 @@ int epclock_dispay_current_lut = EPCLOCK_DISPLAY_LUT_DEFAULT;
 #define EPCLOCK_DISPALY_REFRESH_TIMEOUT		(30)
 #define EPCLOCK_GUI_READY_TIMEOUT			(2)
 
+
+enum {
+	GUI_LAYOUT_TIME,
+	GUI_LAYOUT_TIME_DATE,
+	GUI_LAYOUT_TIME_FORECAST,
+	GUI_LAYOUT_TIME_DATE_FORECAST,
+	GUI_LAYOUT_COUNT
+};
+RTC_DATA_ATTR uint8_t gui_layout = 3;
+
 #define EPCLOCK_OWM_FORECAST_COUNT			(8)
 lv_obj_t *label_time;
-#ifdef CONFIG_LAYOUT_SHOW_DATE
 lv_obj_t *label_weekday;
 lv_obj_t *label_date;
-#endif
 lv_obj_t *icon_battery;
 lv_obj_t *icon_charging;
-#ifdef CONFIG_LAYOUT_SHOW_FORECAST
 lv_obj_t *cont_forecast[EPCLOCK_OWM_FORECAST_COUNT];
 lv_obj_t *label_forecast_time[EPCLOCK_OWM_FORECAST_COUNT];
 lv_obj_t *icon_forecast[EPCLOCK_OWM_FORECAST_COUNT];
 lv_obj_t *label_forecast_temp[EPCLOCK_OWM_FORECAST_COUNT];
-#endif
 
 lv_style_t st_time;
 lv_style_t st_day;
@@ -247,6 +253,8 @@ void sensorTask(void *pvParameter);
 void set_font_style_set(uint8_t style_set);
 void gui_refresh_ready();
 void set_style_set_color(lv_style_t *style, lv_color_t color_text, lv_color_t color_background);
+uint8_t set_gui_layout_next(uint8_t layout);
+uint8_t set_gui_layout_current(uint8_t layout);
 
 
 static const char *TAG = "e-paper clock";
@@ -340,6 +348,7 @@ void app_main(void)
     uint32_t sleep_duration;
     bool sleep_long = false;
     bool sleep_skip;
+    set_gui_layout_current(gui_layout);
     while (1)
     {
         sleep_skip = false;
@@ -392,15 +401,15 @@ void app_main(void)
 				}
 				sprintf(str_buf, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
 				lv_label_set_text(label_time, str_buf);
-#ifdef CONFIG_LAYOUT_SHOW_DATE
-				lv_label_set_text(label_weekday, day_name[timeinfo.tm_wday]);
-				sprintf(str_buf, "%d %s, ", timeinfo.tm_mday, month_name[timeinfo.tm_mon]);
-				lv_label_set_text(label_date, str_buf);
-				if (timeinfo.tm_wday == 0) {
-					set_style_set_color(&st_day, lv_color_hex(EPCLOCK_COLOR_RED_HEX), LV_COLOR_WHITE);
-					request_update_red = true;
+				if ((gui_layout == GUI_LAYOUT_TIME_DATE) || (gui_layout == GUI_LAYOUT_TIME_DATE_FORECAST)) {
+					lv_label_set_text(label_weekday, day_name[timeinfo.tm_wday]);
+					sprintf(str_buf, "%d %s, ", timeinfo.tm_mday, month_name[timeinfo.tm_mon]);
+					lv_label_set_text(label_date, str_buf);
+					if (timeinfo.tm_wday == 0) {
+						set_style_set_color(&st_day, lv_color_hex(EPCLOCK_COLOR_RED_HEX), LV_COLOR_WHITE);
+						request_update_red = true;
+					}
 				}
-#endif
 				if ((vbus_voltege_current_state == VBUS_CONNECTED) || (battery_voltage_level == BATTERY_VOLTAGE_LEVEL_EMPTY)) {
 					lv_img_set_src(icon_battery, battery_icons[battery_voltage_level]);
 				} else {
@@ -411,29 +420,29 @@ void app_main(void)
 				} else {
 					lv_img_set_src(icon_charging, &white);
 				}
-#ifdef CONFIG_LAYOUT_SHOW_FORECAST
-				int wf = 0;
-				for (int i = 0; i < OWM_FORECAST_RECORD_MAX_COUNT; i++) {
-					if (forecast.list[i].dt >= now) {
-						time_t local_dt = forecast.list[i].dt + forecast.city.timezone;
-						int h = (int)((local_dt % 86400) / 3600);
-						int m = (int)((local_dt % 3600) / 60);
-						sprintf(str_buf, "%d:%02d", h, m);
-						lv_label_set_text(label_forecast_time[wf], str_buf);
-						lv_img_dsc_t *icon = NULL;
-						err = owm_forecast_get_icon(&icon, forecast.list[i].weather[0].id, forecast.list[i].sys.pod);
-						if (err == ESP_OK) {
-							lv_img_set_src(icon_forecast[wf], icon);
-						} else {
-							lv_img_set_src(icon_forecast[wf], &white);
+				if ((gui_layout == GUI_LAYOUT_TIME_FORECAST) || (gui_layout == GUI_LAYOUT_TIME_DATE_FORECAST)) {
+					int wf = 0;
+					for (int i = 0; i < OWM_FORECAST_RECORD_MAX_COUNT; i++) {
+						if (forecast.list[i].dt >= now) {
+							time_t local_dt = forecast.list[i].dt + forecast.city.timezone;
+							int h = (int)((local_dt % 86400) / 3600);
+							int m = (int)((local_dt % 3600) / 60);
+							sprintf(str_buf, "%d:%02d", h, m);
+							lv_label_set_text(label_forecast_time[wf], str_buf);
+							lv_img_dsc_t *icon = NULL;
+							err = owm_forecast_get_icon(&icon, forecast.list[i].weather[0].id, forecast.list[i].sys.pod);
+							if (err == ESP_OK) {
+								lv_img_set_src(icon_forecast[wf], icon);
+							} else {
+								lv_img_set_src(icon_forecast[wf], &white);
+							}
+							sprintf(str_buf, "%d%c%cC", (int)forecast.list[i].main.temp, 0xC2, 0xB0);
+							lv_label_set_text(label_forecast_temp[wf], str_buf);
+							wf ++;
+							if (wf >= EPCLOCK_OWM_FORECAST_COUNT) break;
 						}
-						sprintf(str_buf, "%d%c%cC", (int)forecast.list[i].main.temp, 0xC2, 0xB0);
-						lv_label_set_text(label_forecast_temp[wf], str_buf);
-						wf ++;
-						if (wf >= EPCLOCK_OWM_FORECAST_COUNT) break;
 					}
 				}
-#endif
 #ifdef MONITOR_FREE_SPACE
 			    lv_mem_monitor_t mon;
 			    lv_mem_monitor(&mon);
@@ -482,7 +491,7 @@ void app_main(void)
 				}
 				// tilting backwards
 				if (acceleration.y < -BMA220_TRIGGER_LEVEL) {
-					// TODO add an action, change the layout
+					gui_layout = set_gui_layout_next(gui_layout);
 				}
 			} else {
 				sleep_skip = true;
@@ -1111,11 +1120,11 @@ void gui_refresh_ready()
 
 void set_font_style_set(uint8_t style_set)
 {
-#ifdef CONFIG_LAYOUT_SHOW_FORECAST
-    lv_style_set_text_font(&st_time, LV_STATE_DEFAULT, font_style[style_set][FONT_PURPOSE_TIME1]);
-#else
-    lv_style_set_text_font(&st_time, LV_STATE_DEFAULT, font_style[style_set][FONT_PURPOSE_TIME2]);
-#endif
+	if ((gui_layout == GUI_LAYOUT_TIME_FORECAST) || (gui_layout == GUI_LAYOUT_TIME_DATE_FORECAST)) {
+		lv_style_set_text_font(&st_time, LV_STATE_DEFAULT, font_style[style_set][FONT_PURPOSE_TIME1]);
+	} else {
+		lv_style_set_text_font(&st_time, LV_STATE_DEFAULT, font_style[style_set][FONT_PURPOSE_TIME2]);
+	}
     lv_style_set_text_font(&st_day, LV_STATE_DEFAULT, font_style[style_set][FONT_PURPOSE_DATE]);
     lv_style_set_text_font(&st_date, LV_STATE_DEFAULT, font_style[style_set][FONT_PURPOSE_DATE]);
 }
@@ -1134,13 +1143,14 @@ void init_gui_layout()
 	const int cont_forecast_y_size = 82;
 	int cont_time_y_top = 0;
 	int cont_time_y_size = LV_VER_RES_MAX;
-#ifdef CONFIG_LAYOUT_SHOW_FORECAST
-	const int cont_date_y_size = (int)(LV_VER_RES_MAX / 6);
-#else
-#ifdef CONFIG_LAYOUT_SHOW_DATE
-	const int cont_date_y_size = (int)(LV_VER_RES_MAX / 5);
-#endif
-#endif
+	int cont_date_y_size;
+	if ((gui_layout == GUI_LAYOUT_TIME_FORECAST) || (gui_layout == GUI_LAYOUT_TIME_DATE_FORECAST)) {
+		cont_date_y_size = (int)(LV_VER_RES_MAX / 6);
+	} else if (gui_layout == GUI_LAYOUT_TIME_DATE) {
+		cont_date_y_size = (int)(LV_VER_RES_MAX / 5);
+	} else {
+		cont_date_y_size = 0;
+	}
 	lv_style_init(&st_time);
 	lv_style_init(&st_day);
 	lv_style_init(&st_date);
@@ -1160,50 +1170,55 @@ void init_gui_layout()
 
     lv_obj_t *scr = lv_disp_get_scr_act(NULL);
 
-#ifdef CONFIG_LAYOUT_SHOW_FORECAST
-    cont_time_y_top += cont_forecast_y_size;
-    cont_time_y_size -= cont_forecast_y_size;
-    for (int i = 0; i < EPCLOCK_OWM_FORECAST_COUNT; i++) {
-    	cont_forecast[i] = lv_cont_create(scr, NULL);
-    	lv_obj_add_style(cont_forecast[i], LV_LABEL_PART_MAIN, &st_container);
-        lv_obj_set_pos(cont_forecast[i], (int)(i * (LV_HOR_RES_MAX / EPCLOCK_OWM_FORECAST_COUNT)), 0);
-        lv_obj_set_size(cont_forecast[i], (int)(LV_HOR_RES_MAX / EPCLOCK_OWM_FORECAST_COUNT), cont_forecast_y_size);
-        lv_cont_set_layout(cont_forecast[i], LV_LAYOUT_CENTER);
+    if ((gui_layout == GUI_LAYOUT_TIME_FORECAST) || (gui_layout == GUI_LAYOUT_TIME_DATE_FORECAST)) {
+		cont_time_y_top += cont_forecast_y_size;
+		cont_time_y_size -= cont_forecast_y_size;
+		for (int i = 0; i < EPCLOCK_OWM_FORECAST_COUNT; i++) {
+			cont_forecast[i] = lv_cont_create(scr, NULL);
+			lv_obj_add_style(cont_forecast[i], LV_LABEL_PART_MAIN, &st_container);
+			lv_obj_set_pos(cont_forecast[i], (int)(i * (LV_HOR_RES_MAX / EPCLOCK_OWM_FORECAST_COUNT)), 0);
+			lv_obj_set_size(cont_forecast[i], (int)(LV_HOR_RES_MAX / EPCLOCK_OWM_FORECAST_COUNT), cont_forecast_y_size);
+			lv_cont_set_layout(cont_forecast[i], LV_LAYOUT_CENTER);
 
-		label_forecast_time[i] = lv_label_create(cont_forecast[i], NULL);
-		lv_obj_add_style(label_forecast_time[i], LV_LABEL_PART_MAIN, &st_forecast1);
-		lv_label_set_text(label_forecast_time[i], "");
+			label_forecast_time[i] = lv_label_create(cont_forecast[i], NULL);
+			lv_obj_add_style(label_forecast_time[i], LV_LABEL_PART_MAIN, &st_forecast1);
+			lv_label_set_text(label_forecast_time[i], "");
 
-		icon_forecast[i] = lv_img_create(cont_forecast[i], NULL);
-		lv_img_set_src(icon_forecast[i], &white);
+			icon_forecast[i] = lv_img_create(cont_forecast[i], NULL);
+			lv_img_set_src(icon_forecast[i], &white);
 
-		label_forecast_temp[i] = lv_label_create(cont_forecast[i], NULL);
-		lv_obj_add_style(label_forecast_temp[i], LV_LABEL_PART_MAIN, &st_forecast2);
-		lv_label_set_text(label_forecast_temp[i], "");
-   }
-#else
-#ifdef CONFIG_LAYOUT_SHOW_DATE
-    cont_time_y_top += (cont_forecast_y_size / 2);
-    cont_time_y_size -= (cont_forecast_y_size / 2);
-#endif
-#endif
+			label_forecast_temp[i] = lv_label_create(cont_forecast[i], NULL);
+			lv_obj_add_style(label_forecast_temp[i], LV_LABEL_PART_MAIN, &st_forecast2);
+			lv_label_set_text(label_forecast_temp[i], "");
+	    }
+    } else if (gui_layout == GUI_LAYOUT_TIME_DATE) {
+		cont_time_y_top += (cont_forecast_y_size / 2);
+		cont_time_y_size -= (cont_forecast_y_size / 2);
+    }
+    if ((gui_layout == GUI_LAYOUT_TIME_DATE) || (gui_layout == GUI_LAYOUT_TIME_DATE_FORECAST)) {
+		lv_obj_t *cont_date;
+		cont_time_y_size -= cont_date_y_size;
+		cont_date = lv_cont_create(scr, NULL);
+		lv_obj_set_pos(cont_date, 0, cont_time_y_top + cont_time_y_size);
+		lv_obj_set_size(cont_date, LV_HOR_RES_MAX, cont_date_y_size);
+		lv_obj_add_style(cont_date, LV_LABEL_PART_MAIN, &st_container);
+		lv_cont_set_fit(cont_date, LV_FIT_NONE);
+		lv_cont_set_layout(cont_date, LV_LAYOUT_CENTER);
 
-#ifdef CONFIG_LAYOUT_SHOW_DATE
-    lv_obj_t *cont_date;
-    cont_time_y_size -= cont_date_y_size;
-    cont_date = lv_cont_create(scr, NULL);
-    lv_obj_set_pos(cont_date, 0, cont_time_y_top + cont_time_y_size);
-    lv_obj_set_size(cont_date, LV_HOR_RES_MAX, cont_date_y_size);
-	lv_obj_add_style(cont_date, LV_LABEL_PART_MAIN, &st_container);
-	lv_cont_set_fit(cont_date, LV_FIT_NONE);
-    lv_cont_set_layout(cont_date, LV_LAYOUT_CENTER);
+		lv_obj_t *cont_date_grid;
+		cont_date_grid = lv_cont_create(cont_date, NULL);
+		lv_obj_add_style(cont_date_grid, LV_LABEL_PART_MAIN, &st_container);
+		lv_cont_set_fit(cont_date_grid, LV_FIT_TIGHT);
+		lv_cont_set_layout(cont_date_grid, LV_LAYOUT_ROW_TOP);
 
-    lv_obj_t *cont_date_grid;
-    cont_date_grid = lv_cont_create(cont_date, NULL);
-	lv_obj_add_style(cont_date_grid, LV_LABEL_PART_MAIN, &st_container);
-	lv_cont_set_fit(cont_date_grid, LV_FIT_TIGHT);
-    lv_cont_set_layout(cont_date_grid, LV_LAYOUT_ROW_TOP);
-#endif
+		label_date = lv_label_create(cont_date_grid, NULL);
+		lv_obj_add_style(label_date, LV_LABEL_PART_MAIN, &st_date);
+		lv_label_set_text(label_date, "date");
+
+		label_weekday = lv_label_create(cont_date_grid, NULL);
+		lv_obj_add_style(label_weekday, LV_LABEL_PART_MAIN, &st_day);
+		lv_label_set_text(label_weekday, "day of week");
+    }
     lv_obj_t *cont_time;
     cont_time = lv_cont_create(scr, NULL);
     lv_obj_set_pos(cont_time, 0, cont_time_y_top);
@@ -1215,22 +1230,24 @@ void init_gui_layout()
     lv_obj_add_style(label_time, LV_LABEL_PART_MAIN, &st_time);
     lv_label_set_text(label_time, "00:00");
 
-#ifdef CONFIG_LAYOUT_SHOW_DATE
-	label_date = lv_label_create(cont_date_grid, NULL);
-    lv_obj_add_style(label_date, LV_LABEL_PART_MAIN, &st_date);
-    lv_label_set_text(label_date, "date");
-
-	label_weekday = lv_label_create(cont_date_grid, NULL);
-    lv_obj_add_style(label_weekday, LV_LABEL_PART_MAIN, &st_day);
-    lv_label_set_text(label_weekday, "day of week");
-#endif
-
     icon_charging = lv_img_create(scr, NULL);
     lv_obj_set_pos(icon_charging, 10, LV_VER_RES_MAX - 104);
     lv_img_set_src(icon_charging, &white);
     icon_battery = lv_img_create(scr, NULL);
     lv_obj_set_pos(icon_battery, 10, LV_VER_RES_MAX - 64);
     lv_img_set_src(icon_battery, &white);
+}
+
+uint8_t set_gui_layout_next(uint8_t layout)
+{
+	layout++;
+	return set_gui_layout_current(layout);
+}
+
+uint8_t set_gui_layout_current(uint8_t layout)
+{
+	if (layout >= GUI_LAYOUT_COUNT) layout = 0;
+	return layout;
 }
 
 void lv_tick_task(void *arg) {
